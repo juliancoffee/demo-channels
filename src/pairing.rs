@@ -1,18 +1,30 @@
-use crossbeam_channel::{select, Receiver, Sender};
+use crate::Paired;
+use crate::Id;
 use crate::Choice;
-use crate::Answer;
+use crossbeam_channel::{select, Receiver, Sender};
 
-pub fn pairing_loop(event_reciever: Receiver<Choice>, pairing_sender: Sender<Answer>) {
+pub fn pairing_loop(event_reciever: Receiver<(Choice, Id)>, pairing_sender: Sender<Paired>) {
     std::thread::spawn(move || {
-        let mut pair = 0;
+        let (mut blacks, mut whites) = (vec![], vec![]);
+
         loop {
             select! {
-                recv(event_reciever) -> peer => {
-                    pair += 1;
-                    if pair % 2 == 0  {
-                        println!("{:?} received", peer.unwrap());
-                    } else {
-                        println!("Send pair: {:?}", pairing_sender.send(Answer::Ok));
+                recv(event_reciever) -> event => {
+                    println!("{:?} received", event);
+                    match event.unwrap() {
+                        (Choice::Black, id) => { blacks.push(id); },
+                        (Choice::White, id) => { whites.push(id); },
+                    };
+
+                    if blacks.len() > 0 && whites.len() > 0  {
+                        let black = Paired {
+                            id: blacks.pop().unwrap()
+                        };
+                        let white = Paired {
+                            id: whites.pop().unwrap()
+                        };
+                        println!("Send pair: {:?}", pairing_sender.send(black));
+                        println!("Send pair: {:?}", pairing_sender.send(white));
                     }
                 },
             }
